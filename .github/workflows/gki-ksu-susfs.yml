@@ -176,7 +176,7 @@ jobs:
                       ;;
               esac
 
-              MANIFEST_BRANCH="common-${ANDROID_VER}-${BASE_VER}-lts"
+              MANIFEST_BRANCH="common-${ANDROID_VER}-${BASE_VER}"
           fi
 
           echo ">>> Target Branch successfully resolved: $MANIFEST_BRANCH"
