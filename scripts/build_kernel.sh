@@ -3,6 +3,7 @@
 set -euo pipefail
 
 WITH_CUSTOM=${WITH_CUSTOM:-false}
+BASE_VER=${BASE_VER:-}
 
 echo "=== Initializing Execution Engine ==="
 

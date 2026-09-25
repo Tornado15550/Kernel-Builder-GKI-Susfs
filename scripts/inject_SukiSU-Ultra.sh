@@ -5,18 +5,18 @@ echo ">>> Executing Integration Module for SukiSU-Ultra..."
 
 if [ "${USE_DYNAMIC_TRANSPLANT}" == "true" ]; then
     echo ">>> 1. Cloning pristine official SukiSU-Ultra upstream..."
-    git clone https://github.com/SukiSU-Ultra/SukiSU-Ultra.git "${MANAGER_DIR}"
+    git clone "https://github.com/${UPSTREAM_REPO}.git" "${MANAGER_DIR}"
     
     ln -sfn "../${MANAGER_DIR}" "common/${MANAGER_DIR}"
     cd common
-    bash "${MANAGER_DIR}/kernel/setup.sh" main
+    bash "${MANAGER_DIR}/kernel/setup.sh" "${TARGET_BRANCH}"
     cd ..
     
     cd "${MANAGER_DIR}"
     UPSTREAM_HASH=$(git log -n 1 --format="%H" -i --grep="ci skip" --grep="skip ci" --grep="clippy" --invert-grep -- manager/ kernel/ userspace/ .github/workflows/ ":!*Cargo.lock" ":!*Cargo.toml")
     CALCULATED_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
     CALCULATED_COUNT=$(git rev-list --count "${UPSTREAM_HASH}")
-    UPSTREAM_BRANCH="main"
+    UPSTREAM_BRANCH="${TARGET_BRANCH}"
 
     echo ">>> 2. Fetching 'builtin' branch for SuSFS code transplant..."
     git fetch origin builtin:builtin
@@ -35,8 +35,8 @@ if [ "${USE_DYNAMIC_TRANSPLANT}" == "true" ]; then
     git commit -m "chore: CI structural fixes (symlinks and Kbuild)"
 
     echo ">>> 3. Generating filtered SuSFS patch..."
-    git checkout main
-    git diff --diff-filter=AM main..builtin -- kernel/ uapi/ \
+    git checkout "${TARGET_BRANCH}"
+    git diff --diff-filter=AM "${TARGET_BRANCH}..builtin" -- kernel/ uapi/ \
       ':!kernel/.clangd' \
       ':!kernel/.clang-format' \
       ':!kernel/.gitignore' \
@@ -61,12 +61,9 @@ else
     
     cd "${MANAGER_DIR}"
     
-    # FIX 3: Fetch official upstream and calculate the pristine Merge-Base
-    OFFICIAL_REPO_URL="https://github.com/SukiSU-Ultra/SukiSU-Ultra.git"
-    echo ">>> Locating official upstream sync point for SukiSU-Ultra/SukiSU-Ultra..."
-    
-    # We fetch 'main' from the official repo because that is their core tracking branch
-    git fetch --quiet "${OFFICIAL_REPO_URL}" main
+    # FIX 3: Fetch official upstream branch and calculate pristine Merge-Base
+    echo ">>> Locating official upstream sync point for ${UPSTREAM_REPO}..."
+    git fetch --quiet "https://github.com/${UPSTREAM_REPO}.git" "${TARGET_BRANCH}"
     RAW_BASE=$(git merge-base HEAD FETCH_HEAD)
     
         # FIX 4: Walk backward down the pristine mainline branch

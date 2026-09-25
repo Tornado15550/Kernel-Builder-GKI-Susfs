@@ -7,29 +7,8 @@ VARIANT="${1}"
 GH_TOKEN="${2}"
 UPSTREAM_HASH="${3:-}"
 
-# ==========================================
-# ROOT MANAGER FETCH LOGIC
-# ==========================================
-if [[ "${VARIANT}" == "KernelSU-Next" ]]; then
-    REPO="KernelSU-Next/KernelSU-Next"
-    TARGET_BRANCH="dev"
-    WORKFLOW_FILE="build-manager-ci.yml"
-elif [[ "${VARIANT}" == "SukiSU-Ultra" ]]; then
-    REPO="SukiSU-Ultra/SukiSU-Ultra"
-    TARGET_BRANCH="main"
-    WORKFLOW_FILE="build-manager.yml"
-elif [[ "${VARIANT}" == "ReSukiSU" ]]; then
-    REPO="ReSukiSU/ReSukiSU"
-    TARGET_BRANCH="main"
-    WORKFLOW_FILE="build-manager.yml"
-elif [[ "${VARIANT}" == "KernelSU" ]]; then
-    REPO="tiann/KernelSU"
-    TARGET_BRANCH="main"
-    WORKFLOW_FILE="build-manager.yml"
-else
-    echo "[-] Error: Unsupported Variant '${VARIANT}'." >&2
-    exit 1
-fi
+# Inherit the repository variable from the YAML environment
+REPO="${UPSTREAM_REPO}"
 
 echo ">>> Searching $REPO for a Release Manager..."
 

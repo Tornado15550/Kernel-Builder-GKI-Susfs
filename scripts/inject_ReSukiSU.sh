@@ -5,18 +5,18 @@ echo ">>> Executing Integration Module for ReSukiSU..."
 
 if [ "${USE_DYNAMIC_TRANSPLANT}" == "true" ]; then
     echo ">>> 1. Cloning pristine official ReSukiSU upstream..."
-    git clone https://github.com/ReSukiSU/ReSukiSU.git "${MANAGER_DIR}"
+    git clone "https://github.com/${UPSTREAM_REPO}.git" "${MANAGER_DIR}"
     
     ln -sfn "../${MANAGER_DIR}" "common/${MANAGER_DIR}"
     cd common
-    bash "${MANAGER_DIR}/kernel/setup.sh" main
+    bash "${MANAGER_DIR}/kernel/setup.sh" "${TARGET_BRANCH}"
     cd ..
     
     cd "${MANAGER_DIR}"
     UPSTREAM_HASH=$(git log -n 1 --format="%H" -i --grep="ci skip" --grep="skip ci" --grep="clippy" --invert-grep -- manager/ kernel/ userspace/ .github/workflows/ ":!*Cargo.lock" ":!*Cargo.toml")
     CALCULATED_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
     CALCULATED_COUNT=$(git rev-list --count "${UPSTREAM_HASH}")
-    UPSTREAM_BRANCH="main"
+    UPSTREAM_BRANCH="${TARGET_BRANCH}"
 
     echo ">>> 2. Applying dynamic Kleaf bypass & Kconfig overrides..."
     sed -i 's/default KSU_TRACEPOINT_HOOK/default KSU_SUSFS/g' kernel/Kconfig
@@ -40,12 +40,9 @@ else
     
     cd "${MANAGER_DIR}"
     
-    # FIX 3: Fetch official upstream and calculate the pristine Merge-Base
-    OFFICIAL_REPO_URL="https://github.com/ReSukiSU/ReSukiSU.git"
-    echo ">>> Locating official upstream sync point for ReSukiSU/ReSukiSU..."
-    
-    # We fetch 'main' from the official repo because that is their core tracking branch
-    git fetch --quiet "${OFFICIAL_REPO_URL}" main
+    # FIX 3: Fetch official upstream branch and calculate pristine Merge-Base
+    echo ">>> Locating official upstream sync point for ${UPSTREAM_REPO}..."
+    git fetch --quiet "https://github.com/${UPSTREAM_REPO}.git" "${TARGET_BRANCH}"
     RAW_BASE=$(git merge-base HEAD FETCH_HEAD)
     
         # FIX 4: Walk backward down the pristine mainline branch
