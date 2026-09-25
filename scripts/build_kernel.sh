@@ -2,7 +2,8 @@
 # scripts/build_kernel.sh
 set -euo pipefail
 
-WITH_CUSTOM=${WITH_CUSTOM:-false}
+ENABLE_NOMOUNT=${ENABLE_NOMOUNT:-false}
+ENABLE_NET_OPTS=${ENABLE_NET_OPTS:-false}
 BASE_VER=${BASE_VER:-}
 
 echo "=== Initializing Execution Engine ==="
@@ -87,14 +88,14 @@ else
 fi
 
 # --- DYNAMIC KCONFIG VALIDATION REPORT ---
-if [ "$WITH_CUSTOM" = "true" ]; then
+if [ "$ENABLE_NOMOUNT" = "true" ] || [ "$ENABLE_NET_OPTS" = "true" ]; then
     echo "::group::Custom Kconfig Integration Report"
     echo ""
     echo "=============================================="
     echo " CUSTOM KCONFIG VALIDATION REPORT             "
     echo "=============================================="
 
-    FRAGMENT_FILE="../tools/custom.fragment"
+    FRAGMENT_FILE="../tools/custom_combined.fragment"
     
     if [ ! -f "$FRAGMENT_FILE" ]; then
         echo "[-] Notice: tools/custom.fragment not found. Skipping validation."

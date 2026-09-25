@@ -1,4 +1,4 @@
-# tools/custom.fragment
+# tools/net_opts.fragment
 # ==============================================================================
 # CUSTOM ADVANCED CONFIGS
 # Instructions: Uncomment (remove the '# ') to enable a specific configuration.
@@ -32,4 +32,3 @@ CONFIG_NET_SCH_CAKE=y
 
 # --- VIRTUAL NETWORKS & NOMOUNT ---
 CONFIG_DUMMY=y
-CONFIG_NOMOUNT=y

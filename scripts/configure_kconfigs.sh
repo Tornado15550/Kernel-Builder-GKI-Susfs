@@ -2,9 +2,12 @@
 # scripts/configure_kconfigs.sh
 set -euo pipefail
 
-WITH_CUSTOM=${WITH_CUSTOM:-false}
-FRAGMENT_SRC="$(pwd)/tools/custom.fragment"
+ENABLE_NOMOUNT=${ENABLE_NOMOUNT:-false}
+ENABLE_NET_OPTS=${ENABLE_NET_OPTS:-false}
 BASE_VER=${BASE_VER:-}
+
+COMBINED_FRAG="$(pwd)/tools/custom_combined.fragment"
+> "$COMBINED_FRAG" # Initialize empty file
 
 echo "=== Configuring Kconfigs & ABI Neutralization for Kernel $BASE_VER ==="
 
@@ -21,17 +24,12 @@ cd common
     case "$BASE_VER" in
         5.10)
             echo ">>> Maintaining stock ABI/KMI strictness for 5.10 (Untouched to prevent bootloops)..."
-            # Destructive sed commands removed to preserve Android 12 vendor ABI
             ;;
         5.15)
             echo ">>> Disabling strict ABI mode & trimming in legacy configs and BUILD.bazel for 5.15..."
-
-            # 1. Legacy Trimming/ABI Bypass
             sed -i 's/KMI_SYMBOL_LIST_STRICT_MODE=1/KMI_SYMBOL_LIST_STRICT_MODE=0/g' build.config.* 2>/dev/null || true
             sed -i 's/TRIM_NONLISTED_KMI=1/TRIM_NONLISTED_KMI=0/g' build.config.* 2>/dev/null || true
 
-            # 2. Bazel Strict Mode & Trimming Override (Force Injection)
-            # 5.15 uses standard Starlark syntax, so we inject directly under the name attribute.
             if grep -q 'name = "kernel_aarch64",' BUILD.bazel; then
                 sed -i '/name = "kernel_aarch64",/a \    kmi_symbol_list_strict_mode = False,\n    trim_nonlisted_kmi = False,' BUILD.bazel
             fi
@@ -45,55 +43,53 @@ cd common
             ;;
     esac
     
-    # 3. INTEGRATE CUSTOM KCONFIG FRAGMENT
-    if [ "$WITH_CUSTOM" = "true" ]; then
-        if [ ! -f "$FRAGMENT_SRC" ]; then
-            echo "[-] Error: Fragment not found at $FRAGMENT_SRC"
-            exit 1
-        fi  
+    # 3. DYNAMIC FRAGMENT ASSEMBLY
+    if [ "$ENABLE_NOMOUNT" = "true" ] && [ -f "../../tools/nomount.fragment" ]; then
+        echo ">>> Appending NoMount Kconfigs..."
+        cat "../../tools/nomount.fragment" >> "$COMBINED_FRAG"
+        echo "" >> "$COMBINED_FRAG"
+    fi
+
+    if [ "$ENABLE_NET_OPTS" = "true" ] && [ -f "../../tools/net_opts.fragment" ]; then
+        echo ">>> Appending Network Optimization Kconfigs..."
+        cat "../../tools/net_opts.fragment" >> "$COMBINED_FRAG"
+        echo "" >> "$COMBINED_FRAG"
+    fi
+    
+    # 4. INTEGRATE COMBINED KCONFIG FRAGMENT
+    if [ -s "$COMBINED_FRAG" ]; then
         
-        echo ">>> Dynamically wiring NoMount hooks into VFS tree..."
-        # Appending to the absolute end of the files bypasses all context-line shift errors across 5.10-6.12
-        grep -q "nomount" fs/Makefile || echo 'obj-$(CONFIG_NOMOUNT)		+= nomount/' >> fs/Makefile
-        grep -q "nomount" fs/Kconfig || echo 'source "fs/nomount/Kconfig"' >> fs/Kconfig
-        
+        if [ "$ENABLE_NOMOUNT" = "true" ]; then
+            echo ">>> Dynamically wiring NoMount hooks into VFS tree..."
+            grep -q "nomount" fs/Makefile || echo 'obj-$(CONFIG_NOMOUNT)		+= nomount/' >> fs/Makefile
+            grep -q "nomount" fs/Kconfig || echo 'source "fs/nomount/Kconfig"' >> fs/Kconfig
+        fi
 
         case "$BASE_VER" in
             5.10)
                 echo ">>> Injecting Legacy 5.10 Kconfig Fragment..."
-                cp "$FRAGMENT_SRC" arch/arm64/configs/custom_legacy.fragment
-                # Hardcode the fragment request directly into the legacy config file
+                cp "$COMBINED_FRAG" arch/arm64/configs/custom_legacy.fragment
                 echo 'EXTRA_DEFCONFIG_FRAGMENTS="custom_legacy.fragment"' >> build.config.gki.aarch64
                 ;;
             5.15)
                 echo ">>> Injecting Bazel 5.15 Kconfig Fragment via legacy build.config..."
-                # Sent to legacy Make ONLY. Bazel macro does not support post_defconfig_fragments.
-                cp "$FRAGMENT_SRC" arch/arm64/configs/custom_legacy.fragment
+                cp "$COMBINED_FRAG" arch/arm64/configs/custom_legacy.fragment
                 echo 'EXTRA_DEFCONFIG_FRAGMENTS="custom_legacy.fragment"' >> build.config.gki.aarch64
                 ;;
             6.1)
                 echo ">>> Injecting Bazel 6.1 Kconfig Fragment..."
-                cp "$FRAGMENT_SRC" custom_fragment
-                # 6.1 uses the standard Starlark target declaration
+                cp "$COMBINED_FRAG" custom_fragment
                 sed -i '/name = "kernel_aarch64",/a \    post_defconfig_fragments = ["custom_fragment"],' BUILD.bazel
                 ;;
             *)
-                # 6.6 and 6.12+
                 echo ">>> Injecting Bazel 6.6+ Kconfig Fragment..."
-                cp "$FRAGMENT_SRC" custom_fragment
+                cp "$COMBINED_FRAG" custom_fragment
                 
                 if grep -q '"kernel_aarch64": {' BUILD.bazel; then
-                    # Syntax for 6.6 (Dictionary format)
-                    echo "  -> Found dictionary syntax!"
                     sed -i '/"kernel_aarch64": {/a \        "defconfig_fragments": ["custom_fragment"],' BUILD.bazel
-                
                 elif grep -q 'name = "kernel_aarch64",' BUILD.bazel; then
-                    # Syntax for 6.12 (Standard Starlark format)
-                    echo "  -> Found Starlark syntax!"
                     sed -i '/name = "kernel_aarch64",/a \    post_defconfig_fragments = ["custom_fragment"],' BUILD.bazel
-                
                 else
-                    # Fail immediately if neither matches
                     echo "[-] ERROR: Could not find kernel_aarch64 injection point in BUILD.bazel!"
                     exit 1
                 fi

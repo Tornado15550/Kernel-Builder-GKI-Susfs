@@ -1,0 +1,2 @@
+# tools/nomount.fragment
+CONFIG_NOMOUNT=y

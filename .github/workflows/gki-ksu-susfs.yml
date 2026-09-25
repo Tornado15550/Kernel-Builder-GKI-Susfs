@@ -38,8 +38,14 @@ on:
         type: boolean
         default: true
         
-      custom_kconfigs:
-        description: "Inject nomount VFS & Network Optimizations (BBR, CAKE, FastOpen, ECN)"
+      enable_nomount:
+        description: "Inject nomount VFS module"
+        required: false
+        type: boolean
+        default: false
+        
+      enable_net_opts:
+        description: "Inject Network Optimizations (BBR, CAKE, FastOpen, ECN)"
         required: false
         type: boolean
         default: false
@@ -299,34 +305,47 @@ jobs:
 
       - name: Configure Kconfigs and Fragments
         env:
-          WITH_CUSTOM: ${{ inputs.custom_kconfigs }}
+          ENABLE_NOMOUNT: ${{ inputs.enable_nomount }}
+          ENABLE_NET_OPTS: ${{ inputs.enable_net_opts }}
         run: |
           chmod +x scripts/configure_kconfigs.sh
           ./scripts/configure_kconfigs.sh
-          
+
       - name: Inject User Source Files
-        if: ${{ inputs.custom_kconfigs }}
+        if: inputs.enable_nomount == true || inputs.enable_net_opts == true
+        env:
+          ENABLE_NOMOUNT: ${{ inputs.enable_nomount }}
         run: |
-          echo ">>> Fetching pinned nomount source..."
-          NOMOUNT_DIR="$(pwd)/tools/user_source/fs/nomount"
-          NOMOUNT_COMMIT="db76155b6c8073dd02b8f7ecf6cdae4a1547e157"
-          
-          # Export to GITHUB_ENV so the Artifact fetcher can use it later
-          echo "NOMOUNT_COMMIT=${NOMOUNT_COMMIT}" >> $GITHUB_ENV
-          
-          # Force overwrite the existing .c and .h files with the pinned working versions
-          curl -sSL "https://raw.githubusercontent.com/maxsteeel/nomount/${NOMOUNT_COMMIT}/kernel/src/nomount.c" -o "$NOMOUNT_DIR/nomount.c"
-          curl -sSL "https://raw.githubusercontent.com/maxsteeel/nomount/${NOMOUNT_COMMIT}/kernel/src/nomount.h" -o "$NOMOUNT_DIR/nomount.h"
+          if [ "$ENABLE_NOMOUNT" = "true" ]; then
+            echo ">>> Fetching pinned nomount source..."
+            NOMOUNT_DIR="$(pwd)/tools/user_source/fs/nomount"
+            NOMOUNT_COMMIT="db76155b6c8073dd02b8f7ecf6cdae4a1547e157"
+            
+            # Export to GITHUB_ENV so the Artifact fetcher can use it later
+            echo "NOMOUNT_COMMIT=${NOMOUNT_COMMIT}" >> $GITHUB_ENV
+            
+            # Force overwrite the existing .c and .h files with the pinned working versions
+            curl -sSL "https://raw.githubusercontent.com/maxsteeel/nomount/${NOMOUNT_COMMIT}/kernel/src/nomount.c" -o "$NOMOUNT_DIR/nomount.c"
+            curl -sSL "https://raw.githubusercontent.com/maxsteeel/nomount/${NOMOUNT_COMMIT}/kernel/src/nomount.h" -o "$NOMOUNT_DIR/nomount.h"
+          fi
 
           echo ">>> Injecting user source files into common tree..."
           shopt -s dotglob nullglob
-          cp -r "$(pwd)/tools/user_source/"* kernel_workspace/common/
           
-          echo ">>> Source injection complete."
+          # Only attempt to copy if there are actually files in the directory
+          SRC_FILES=($(pwd)/tools/user_source/*)
+          if [ ${#SRC_FILES[@]} -gt 0 ]; then
+            cp -r "$(pwd)/tools/user_source/"* kernel_workspace/common/
+            echo "  -> Files injected successfully."
+          else
+            echo "  -> No files found in tools/user_source/ to inject."
+          fi
+          
+          echo ">>> Source injection phase complete."
         shell: bash
 
       - name: Apply User Patches
-        if: ${{ inputs.custom_kconfigs }}
+        if: inputs.enable_nomount == true || inputs.enable_net_opts == true
         run: |
           PATCH_DIR="$(pwd)/tools/user_patches"
           
@@ -368,7 +387,8 @@ jobs:
 
       - name: Build common kernel Image
         env:
-          WITH_CUSTOM: ${{ inputs.custom_kconfigs }}
+          ENABLE_NOMOUNT: ${{ inputs.enable_nomount }}
+          ENABLE_NET_OPTS: ${{ inputs.enable_net_opts }}
           ROOT_MANAGER: ${{ inputs.root_manager }}
         run: |
           # Injecting the REAL Google identity into the script session
@@ -470,7 +490,7 @@ jobs:
           if-no-files-found: error
           
       - name: Fetch NoMount KernelSU Module
-        if: inputs.custom_kconfigs == true
+        if: inputs.enable_nomount == true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -512,7 +532,7 @@ jobs:
         shell: bash
 
       - name: Upload NoMount Module
-        if: inputs.custom_kconfigs == true
+        if: inputs.enable_nomount == true
         uses: actions/upload-artifact@v4
         with:
           name: NoMount-KSU-Module
