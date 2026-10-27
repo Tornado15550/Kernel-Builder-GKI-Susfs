@@ -268,9 +268,13 @@ jobs:
 
           # Capture the PURE Google hash AND the official Unix timestamp
           cd common
-          echo ">>> Checking out specific commit..."
+          echo ">>> Setting up remote and checking out specific commit..."
+          
+          # Add or update the 'origin' remote pointing to Google's common kernel source
+          git remote set-url origin https://android.googlesource.com/kernel/common 2>/dev/null || git remote add origin https://android.googlesource.com/kernel/common
+          
           git fetch origin 32521e28daaacb02caff14090988d91503e61978
-          git checkout 32521e28daaacb02caff14090988d91503e61978
+          git checkout FETCH_HEAD
           echo "OFFICIAL_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
           echo "OFFICIAL_DATE=$(git log -1 --format=%ct)" >> $GITHUB_ENV
           echo ">>> Captured Hash: $(git rev-parse --short HEAD)"
