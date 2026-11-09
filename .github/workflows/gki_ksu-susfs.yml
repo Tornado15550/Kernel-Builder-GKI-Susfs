@@ -286,6 +286,14 @@ jobs:
           # Capture the PURE Google hash AND the official Unix timestamp (or apply user overrides)
           cd common
 
+          echo ">>> Setting up remote and checking out specific commit..."
+          
+          # Add or update the 'origin' remote pointing to Google's common kernel source
+          git remote set-url origin https://android.googlesource.com/kernel/common 2>/dev/null || git remote add origin https://android.googlesource.com/kernel/common
+          
+          git fetch origin 32521e28daaacb02caff14090988d91503e61978
+          git checkout FETCH_HEAD
+
           INPUT_R="${{ inputs.custom_uname_r }}"
           INPUT_V="${{ inputs.custom_uname_v }}"
 
